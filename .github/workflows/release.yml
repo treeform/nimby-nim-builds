@@ -75,6 +75,11 @@ jobs:
           # Copy required files
           cp Nim/copying.txt dist/${ARTIFACT_NAME}/
           
+          # Set executable bit on binaries (Linux/macOS only)
+          if [ "${{ runner.os }}" != "Windows" ]; then
+            chmod +x dist/${ARTIFACT_NAME}/bin/*
+          fi
+          
           # Create archive
           cd dist
           if [ "${{ runner.os }}" = "Windows" ]; then
