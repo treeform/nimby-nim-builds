@@ -54,6 +54,21 @@ jobs:
           else
             ./build_all.sh
           fi
+          # Add Nim to PATH for subsequent steps
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Clone and build nimby
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/treeform/nimby.git
+          cd nimby
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            nim c -d:release -o:nimby.exe src/nimby.nim
+            cp nimby.exe ../Nim/bin/
+          else
+            nim c -d:release -o:nimby src/nimby.nim
+            cp nimby ../Nim/bin/
+          fi
 
       - name: Prepare distribution
         id: meta
