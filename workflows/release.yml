@@ -1,0 +1,113 @@
+name: Nim Binaries Distribution
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      nim_version:
+        description: 'Nim version to build (e.g., 2.2.6)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Get Nim version from tag
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            NIM_VERSION="${{ github.event.inputs.nim_version }}"
+          else
+            # For release events, use the release tag name
+            NIM_VERSION="${{ github.event.release.tag_name }}"
+          fi
+          
+          # Validate: version must NOT start with 'v'
+          if [[ "$NIM_VERSION" == v* ]]; then
+            echo "ERROR: Version must not start with 'v'. Use '2.2.6' not 'v2.2.6'"
+            exit 1
+          fi
+          
+          echo "nim_version=${NIM_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building Nim version: ${NIM_VERSION}"
+
+      - name: Clone Nim repository
+        shell: bash
+        run: |
+          # Nim repo uses v-prefixed tags, so add 'v' prefix
+          git clone --branch v${{ steps.version.outputs.nim_version }} --depth 1 https://github.com/nim-lang/Nim.git
+      
+      - name: Build Nim
+        shell: bash
+        run: |
+          cd Nim
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./build_all.bat
+          else
+            ./build_all.sh
+          fi
+
+      - name: Prepare distribution
+        id: meta
+        shell: bash
+        run: |
+          NIM_VERSION="${{ steps.version.outputs.nim_version }}"
+          ARTIFACT_NAME="nim-${NIM_VERSION}-${{ runner.os }}-${{ runner.arch }}"
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          
+          # Create distribution directory
+          mkdir -p dist/${ARTIFACT_NAME}
+          
+          # Copy required directories
+          cp -r Nim/bin dist/${ARTIFACT_NAME}/
+          cp -r Nim/compiler dist/${ARTIFACT_NAME}/
+          cp -r Nim/config dist/${ARTIFACT_NAME}/
+          cp -r Nim/lib dist/${ARTIFACT_NAME}/
+          
+          # Copy required files
+          cp Nim/copying.txt dist/${ARTIFACT_NAME}/
+          
+          # Create archive
+          cd dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a ${ARTIFACT_NAME}.zip ${ARTIFACT_NAME}
+          else
+            tar -czvf ${ARTIFACT_NAME}.tar.gz ${ARTIFACT_NAME}
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+
+  release:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lah dist
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
