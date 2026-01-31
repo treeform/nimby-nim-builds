@@ -60,9 +60,6 @@ jobs:
       - name: Print Nimby version
         run: nimby --version
 
-      - name: Print Nimble version
-        run: nimble --version
-
       - name: Create test file
         shell: bash
         run: |
