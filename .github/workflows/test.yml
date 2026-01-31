@@ -44,7 +44,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           powershell -NoProfile -Command Expand-Archive -Force -Path nim.zip -DestinationPath .
-          Rename-Item -Path "nim-${{ env.NIM_VERSION }}" -NewName "nim"
+          Rename-Item -Path "nim-${{ env.NIM_VERSION }}-${{ matrix.platform }}" -NewName "nim"
 
       - name: Add Nim to PATH (Unix)
         if: runner.os != 'Windows'
