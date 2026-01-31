@@ -1,0 +1,72 @@
+name: Test
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: Linux-X64
+          - os: ubuntu-24.04-arm
+            platform: Linux-ARM64
+          - os: macos-latest
+            platform: macOS-ARM64
+          - os: windows-latest
+            platform: Windows-X64
+    runs-on: ${{ matrix.os }}
+    env:
+      NIM_VERSION: "2.2.6"
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download Nim build (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          curl -sSL "https://github.com/treeform/nimby-nim-builds/releases/download/${{ env.NIM_VERSION }}/nim-${{ env.NIM_VERSION }}-${{ matrix.platform }}.tar.gz" -o nim.tar.gz
+
+      - name: Download Nim build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          curl -sSL "https://github.com/treeform/nimby-nim-builds/releases/download/${{ env.NIM_VERSION }}/nim-${{ env.NIM_VERSION }}-${{ matrix.platform }}.zip" -o nim.zip
+
+      - name: Extract Nim build (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p nim
+          tar xf nim.tar.gz --strip-components=1 -C nim
+
+      - name: Extract Nim build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          powershell -NoProfile -Command Expand-Archive -Force -Path nim.zip -DestinationPath .
+          Rename-Item -Path "nim-${{ env.NIM_VERSION }}" -NewName "nim"
+
+      - name: Add Nim to PATH (Unix)
+        if: runner.os != 'Windows'
+        run: echo "${{ github.workspace }}/nim/bin" >> "$GITHUB_PATH"
+
+      - name: Add Nim to PATH (Windows)
+        if: runner.os == 'Windows'
+        run: echo "${{ github.workspace }}\nim\bin" >> $env:GITHUB_PATH
+
+      - name: Print Nim version
+        run: nim --version
+
+      - name: Print Nimby version
+        run: nimby --version
+
+      - name: Print Nimble version
+        run: nimble --version
+
+      - name: Create test file
+        shell: bash
+        run: |
+          echo 'echo "Hello from Nim!"' > test.nim
+
+      - name: Test Nim build
+        run: nim c -r test.nim
