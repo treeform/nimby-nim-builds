@@ -18,6 +18,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    outputs:
+      nim_version: ${{ steps.version.outputs.nim_version }}
     steps:
       - name: Get Nim version from tag
         id: version
@@ -95,39 +97,49 @@ jobs:
             chmod +x dist/${ARTIFACT_NAME}/bin/*
           fi
           
-          # Create archive
+          # Create archive in dist folder, then move to root for clean upload
           cd dist
           if [ "${{ runner.os }}" = "Windows" ]; then
             7z a ${ARTIFACT_NAME}.zip ${ARTIFACT_NAME}
+            echo "archive_file=${ARTIFACT_NAME}.zip" >> "$GITHUB_OUTPUT"
           else
             tar -czvf ${ARTIFACT_NAME}.tar.gz ${ARTIFACT_NAME}
+            echo "archive_file=${ARTIFACT_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
+          # Remove the uncompressed folder, keep only the archive
+          rm -rf ${ARTIFACT_NAME}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.meta.outputs.artifact_name }}
-          path: |
-            dist/*.tar.gz
-            dist/*.zip
+          path: dist/${{ steps.meta.outputs.archive_file }}
 
   release:
     needs: build
-    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
-          merge-multiple: true
+          path: artifacts
 
-      - name: List artifacts
-        run: ls -lah dist
+      - name: Flatten artifacts
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec mv {} dist/ \;
+          ls -lah dist
 
-      - name: Upload assets to GitHub Release
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ needs.build.outputs.nim_version }}
+          name: Nim ${{ needs.build.outputs.nim_version }}
+          body: |
+            Nim ${{ needs.build.outputs.nim_version }} binary distributions with nimby included.
+            
+            For source code, see the official Nim repository: https://github.com/nim-lang/Nim/releases/tag/v${{ needs.build.outputs.nim_version }}
           files: dist/*
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
