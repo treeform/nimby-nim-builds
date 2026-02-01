@@ -8,11 +8,11 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        os: [ubuntu-latest, ubuntu-22.04-arm, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             platform: Linux-X64
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-22.04-arm
             platform: Linux-ARM64
           - os: macos-latest
             platform: macOS-ARM64
