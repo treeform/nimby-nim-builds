@@ -16,7 +16,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        os: [ubuntu-latest, ubuntu-22.04-arm, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     outputs:
       nim_version: ${{ steps.version.outputs.nim_version }}
