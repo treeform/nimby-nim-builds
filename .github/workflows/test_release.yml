@@ -1,0 +1,123 @@
+name: Test Release Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      nim_version:
+        description: 'Nim version to build (e.g., 2.2.6)'
+        required: false
+        default: '2.2.6'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            container: quay.io/pypa/manylinux_2_34_x86_64
+          - os: ubuntu-22.04-arm
+            container: quay.io/pypa/manylinux_2_34_aarch64
+          - os: macos-latest
+            container: null
+          - os: windows-latest
+            container: null
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    env:
+      NIM_VERSION: ${{ github.event.inputs.nim_version || '2.2.6' }}
+    steps:
+      - name: Install build dependencies (Linux container)
+        if: matrix.container
+        run: yum install -y git gcc make which tar gzip
+
+      - name: Get Nim version
+        id: version
+        shell: bash
+        run: |
+          echo "nim_version=${NIM_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building Nim version: ${NIM_VERSION}"
+
+      - name: Clone Nim repository
+        shell: bash
+        run: |
+          git clone --branch v${{ steps.version.outputs.nim_version }} --depth 1 https://github.com/nim-lang/Nim.git
+
+      - name: Build Nim
+        shell: bash
+        run: |
+          cd Nim
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./build_all.bat
+          else
+            ./build_all.sh
+          fi
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Clone and build nimby
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/treeform/nimby.git
+          cd nimby
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            nim c -d:release -o:nimby.exe src/nimby.nim
+            cp nimby.exe ../Nim/bin/
+          else
+            nim c -d:release -o:nimby src/nimby.nim
+            cp nimby ../Nim/bin/
+          fi
+
+      - name: Print versions
+        shell: bash
+        run: |
+          nim --version
+          nimby --version
+
+      - name: Prepare distribution
+        id: meta
+        shell: bash
+        run: |
+          NIM_VERSION="${{ steps.version.outputs.nim_version }}"
+          ARTIFACT_NAME="nim-${NIM_VERSION}-${{ runner.os }}-${{ runner.arch }}"
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          mkdir -p dist/${ARTIFACT_NAME}
+          cp -r Nim/bin dist/${ARTIFACT_NAME}/
+          cp -r Nim/compiler dist/${ARTIFACT_NAME}/
+          cp -r Nim/config dist/${ARTIFACT_NAME}/
+          cp -r Nim/lib dist/${ARTIFACT_NAME}/
+          cp Nim/copying.txt dist/${ARTIFACT_NAME}/
+          if [ "${{ runner.os }}" != "Windows" ]; then
+            chmod +x dist/${ARTIFACT_NAME}/bin/*
+          fi
+          cd dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a ${ARTIFACT_NAME}.zip ${ARTIFACT_NAME}
+            echo "archive_file=${ARTIFACT_NAME}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czvf ${ARTIFACT_NAME}.tar.gz ${ARTIFACT_NAME}
+            echo "archive_file=${ARTIFACT_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+          rm -rf ${ARTIFACT_NAME}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: dist/${{ steps.meta.outputs.archive_file }}
+
+  verify:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List built artifacts
+        run: |
+          echo "Built artifacts:"
+          find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec ls -lh {} \;
