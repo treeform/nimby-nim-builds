@@ -1,10 +1,6 @@
 name: Test Release Build
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
   workflow_dispatch:
     inputs:
       nim_version:

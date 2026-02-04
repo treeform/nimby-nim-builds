@@ -4,6 +4,12 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      nim_version:
+        description: 'Nim version to test (e.g., 2.2.6)'
+        required: false
+        default: '2.2.6'
 jobs:
   test:
     strategy:
@@ -24,7 +30,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     env:
-      NIM_VERSION: "2.2.6"
+      NIM_VERSION: ${{ github.event.inputs.nim_version || '2.2.6' }}
     steps:
       - uses: actions/checkout@v3
 
