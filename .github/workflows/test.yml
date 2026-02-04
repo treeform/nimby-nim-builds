@@ -8,21 +8,29 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-22.04-arm, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             platform: Linux-X64
+            container: quay.io/pypa/manylinux_2_34_x86_64
           - os: ubuntu-22.04-arm
             platform: Linux-ARM64
+            container: quay.io/pypa/manylinux_2_34_aarch64
           - os: macos-latest
             platform: macOS-ARM64
+            container: null
           - os: windows-latest
             platform: Windows-X64
+            container: null
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     env:
       NIM_VERSION: "2.2.6"
     steps:
       - uses: actions/checkout@v3
+
+      - name: Install dependencies (Linux container)
+        if: matrix.container
+        run: yum install -y curl tar gzip
 
       - name: Download Nim build (Unix)
         if: runner.os != 'Windows'
