@@ -30,7 +30,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     env:
-      NIM_VERSION: ${{ github.event.inputs.nim_version || '2.2.2' }}
+      NIM_VERSION: ${{ github.event.inputs.nim_version || '2.2.4' }}
     steps:
       - uses: actions/checkout@v3
 
