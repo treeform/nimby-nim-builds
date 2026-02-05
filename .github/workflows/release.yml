@@ -34,6 +34,8 @@ jobs:
         if: matrix.container
         run: yum install -y git gcc make which tar gzip
 
+      - uses: actions/checkout@v3
+
       - name: Get Nim version from tag
         id: version
         shell: bash
@@ -84,6 +86,17 @@ jobs:
             nim c -d:release -o:nimby src/nimby.nim
             cp nimby ../Nim/bin/
           fi
+
+      - name: Copy DLLs to Nim bin (Windows only)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cp dlls/* Nim/bin/
+
+      - name: Clean up unnecessary files from bin
+        shell: bash
+        run: |
+          rm -f Nim/bin/empty.txt
+          rm -f Nim/bin/nim_csources_*
 
       - name: Prepare distribution
         id: meta
