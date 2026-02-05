@@ -92,6 +92,12 @@ jobs:
         shell: bash
         run: cp dlls/* Nim/bin/
 
+      - name: Clean up unnecessary files from bin
+        shell: bash
+        run: |
+          rm -f Nim/bin/empty.txt
+          rm -f Nim/bin/nim_csources_*
+
       - name: Prepare distribution
         id: meta
         shell: bash
