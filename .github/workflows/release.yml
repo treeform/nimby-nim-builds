@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: |
           # Nim repo uses v-prefixed tags, so add 'v' prefix
-          git clone --branch v${{ steps.version.outputs.nim_version }} --depth 1 https://github.com/nim-lang/Nim.git
+          git clone --branch "v${{ steps.version.outputs.nim_version }}" --depth 1 https://github.com/nim-lang/Nim.git
       
       - name: Build Nim
         shell: bash
