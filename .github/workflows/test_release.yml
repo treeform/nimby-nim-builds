@@ -1,16 +1,12 @@
-name: Nim Binaries Distribution
+name: Test Release Build
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       nim_version:
         description: 'Nim version to build (e.g., 2.2.6)'
-        required: true
-
-permissions:
-  contents: write
+        required: false
+        default: '2.2.6'
 
 jobs:
   build:
@@ -27,39 +23,25 @@ jobs:
             container: null
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
-    outputs:
-      nim_version: ${{ steps.version.outputs.nim_version }}
+    env:
+      NIM_VERSION: ${{ github.event.inputs.nim_version || '2.2.6' }}
     steps:
       - name: Install build dependencies (Linux container)
         if: matrix.container
         run: yum install -y git gcc make which tar gzip
 
-      - name: Get Nim version from tag
+      - name: Get Nim version
         id: version
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            NIM_VERSION="${{ github.event.inputs.nim_version }}"
-          else
-            # For release events, use the release tag name
-            NIM_VERSION="${{ github.event.release.tag_name }}"
-          fi
-          
-          # Validate: version must NOT start with 'v'
-          if [[ "$NIM_VERSION" == v* ]]; then
-            echo "ERROR: Version must not start with 'v'. Use '2.2.6' not 'v2.2.6'"
-            exit 1
-          fi
-          
           echo "nim_version=${NIM_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building Nim version: ${NIM_VERSION}"
 
       - name: Clone Nim repository
         shell: bash
         run: |
-          # Nim repo uses v-prefixed tags, so add 'v' prefix
           git clone --branch v${{ steps.version.outputs.nim_version }} --depth 1 https://github.com/nim-lang/Nim.git
-      
+
       - name: Build Nim
         shell: bash
         run: |
@@ -69,7 +51,6 @@ jobs:
           else
             ./build_all.sh
           fi
-          # Add Nim to PATH for subsequent steps
           echo "$PWD/bin" >> "$GITHUB_PATH"
 
       - name: Clone and build nimby
@@ -85,6 +66,12 @@ jobs:
             cp nimby ../Nim/bin/
           fi
 
+      - name: Print versions
+        shell: bash
+        run: |
+          nim --version
+          nimby --version
+
       - name: Prepare distribution
         id: meta
         shell: bash
@@ -92,25 +79,15 @@ jobs:
           NIM_VERSION="${{ steps.version.outputs.nim_version }}"
           ARTIFACT_NAME="nim-${NIM_VERSION}-${{ runner.os }}-${{ runner.arch }}"
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
-          
-          # Create distribution directory
           mkdir -p dist/${ARTIFACT_NAME}
-          
-          # Copy required directories
           cp -r Nim/bin dist/${ARTIFACT_NAME}/
           cp -r Nim/compiler dist/${ARTIFACT_NAME}/
           cp -r Nim/config dist/${ARTIFACT_NAME}/
           cp -r Nim/lib dist/${ARTIFACT_NAME}/
-          
-          # Copy required files
           cp Nim/copying.txt dist/${ARTIFACT_NAME}/
-          
-          # Set executable bit on binaries (Linux/macOS only)
           if [ "${{ runner.os }}" != "Windows" ]; then
             chmod +x dist/${ARTIFACT_NAME}/bin/*
           fi
-          
-          # Create archive in dist folder, then move to root for clean upload
           cd dist
           if [ "${{ runner.os }}" = "Windows" ]; then
             7z a ${ARTIFACT_NAME}.zip ${ARTIFACT_NAME}
@@ -119,7 +96,6 @@ jobs:
             tar -czvf ${ARTIFACT_NAME}.tar.gz ${ARTIFACT_NAME}
             echo "archive_file=${ARTIFACT_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
-          # Remove the uncompressed folder, keep only the archive
           rm -rf ${ARTIFACT_NAME}
 
       - name: Upload artifact
@@ -128,31 +104,16 @@ jobs:
           name: ${{ steps.meta.outputs.artifact_name }}
           path: dist/${{ steps.meta.outputs.archive_file }}
 
-  release:
+  verify:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download build artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Flatten artifacts
+      - name: List built artifacts
         run: |
-          mkdir -p dist
-          find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec mv {} dist/ \;
-          ls -lah dist
-
-      - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.build.outputs.nim_version }}
-          name: Nim ${{ needs.build.outputs.nim_version }}
-          body: |
-            Nim ${{ needs.build.outputs.nim_version }} binary distributions with nimby included.
-            
-            For source code, see the official Nim repository: https://github.com/nim-lang/Nim/releases/tag/v${{ needs.build.outputs.nim_version }}
-          files: dist/*
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "Built artifacts:"
+          find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec ls -lh {} \;
