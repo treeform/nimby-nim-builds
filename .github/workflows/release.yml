@@ -46,13 +46,13 @@ jobs:
             # For release events, use the release tag name
             NIM_VERSION="${{ github.event.release.tag_name }}"
           fi
-          
+
           # Validate: version must NOT start with 'v'
           if [[ "$NIM_VERSION" == v* ]]; then
             echo "ERROR: Version must not start with 'v'. Use '2.2.6' not 'v2.2.6'"
             exit 1
           fi
-          
+
           echo "nim_version=${NIM_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building Nim version: ${NIM_VERSION}"
 
@@ -61,7 +61,7 @@ jobs:
         run: |
           # Nim repo uses v-prefixed tags, so add 'v' prefix
           git clone --branch "v${{ steps.version.outputs.nim_version }}" --depth 1 https://github.com/nim-lang/Nim.git
-      
+
       - name: Build Nim
         shell: bash
         run: |
@@ -105,24 +105,33 @@ jobs:
           NIM_VERSION="${{ steps.version.outputs.nim_version }}"
           ARTIFACT_NAME="nim-${NIM_VERSION}-${{ runner.os }}-${{ runner.arch }}"
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
-          
+
           # Create distribution directory
           mkdir -p dist/${ARTIFACT_NAME}
-          
+
           # Copy required directories
           cp -r Nim/bin dist/${ARTIFACT_NAME}/
           cp -r Nim/compiler dist/${ARTIFACT_NAME}/
           cp -r Nim/config dist/${ARTIFACT_NAME}/
           cp -r Nim/lib dist/${ARTIFACT_NAME}/
-          
+
+          # Copy only required docs assets for nim doc.
+          mkdir -p dist/${ARTIFACT_NAME}/doc
+          cp Nim/doc/nimdoc.css dist/${ARTIFACT_NAME}/doc/
+          mkdir -p dist/${ARTIFACT_NAME}/tools/dochack
+          cp Nim/tools/dochack/dochack.nim \
+            dist/${ARTIFACT_NAME}/tools/dochack/
+          cp Nim/tools/dochack/fuzzysearch.nim \
+            dist/${ARTIFACT_NAME}/tools/dochack/
+
           # Copy required files
           cp Nim/copying.txt dist/${ARTIFACT_NAME}/
-          
+
           # Set executable bit on binaries (Linux/macOS only)
           if [ "${{ runner.os }}" != "Windows" ]; then
             chmod +x dist/${ARTIFACT_NAME}/bin/*
           fi
-          
+
           # Create archive in dist folder, then move to root for clean upload
           cd dist
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -163,7 +172,7 @@ jobs:
           name: Nim ${{ needs.build.outputs.nim_version }}
           body: |
             Nim ${{ needs.build.outputs.nim_version }} binary distributions with nimby included.
-            
+
             For source code, see the official Nim repository: https://github.com/nim-lang/Nim/releases/tag/v${{ needs.build.outputs.nim_version }}
           files: dist/*
           fail_on_unmatched_files: true
